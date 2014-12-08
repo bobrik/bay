@@ -33,16 +33,22 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		u := *req.URL
-		u.Host = req.Host
+
+		if req.Host == "localhost" {
+			u.Host = "registry-1.docker.io"
+		} else {
+			u.Host = req.Host
+		}
+
 		if req.TLS != nil {
 			u.Scheme = "https"
 		} else {
 			u.Scheme = "http"
 		}
 
-		log.Println("got request:", u.String())
+		log.Println("got request:", req.Method, u.String())
 
-		if !strings.HasPrefix(u.Path, "/v1/images/") || !strings.HasSuffix(u.Path, "/layer") {
+		if req.Method == "PUT" || !strings.HasPrefix(u.Path, "/v1/images/") || !strings.HasSuffix(u.Path, "/layer") {
 			pu := u
 			pu.Path = "/"
 			proxy := httputil.NewSingleHostReverseProxy(&pu)
