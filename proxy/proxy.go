@@ -15,21 +15,14 @@ import (
 )
 
 func main() {
-	registry := flag.String("registry", "", "registry url to proxy requests")
 	tracker := flag.String("tracker", "", "tracker url: http://host:port/")
 	listen := flag.String("listen", "0.0.0.0:8888", "bind location")
 	root := flag.String("root", "", "root dir to keep working files")
 	flag.Parse()
 
-	if *registry == "" || *tracker == "" || *root == "" {
+	if *tracker == "" || *root == "" {
 		flag.PrintDefaults()
 		return
-	}
-
-	// TODO: infer registry from request and create proxy on demand
-	u, err := url.Parse(*registry)
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	tu, err := url.Parse(*tracker)
@@ -37,21 +30,29 @@ func main() {
 		log.Fatal(err)
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(u)
-
 	mux := http.NewServeMux()
-
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		log.Println("got request:", req.URL.Path)
+		u := *req.URL
+		u.Host = req.Host
+		if req.TLS != nil {
+			u.Scheme = "https"
+		} else {
+			u.Scheme = "http"
+		}
 
-		if !strings.HasPrefix(req.URL.Path, "/v1/images/") || !strings.HasSuffix(req.URL.Path, "/layer") {
+		log.Println("got request:", u.String())
+
+		if !strings.HasPrefix(u.Path, "/v1/images/") || !strings.HasSuffix(u.Path, "/layer") {
+			pu := u
+			pu.Path = "/"
+			proxy := httputil.NewSingleHostReverseProxy(&pu)
 			proxy.ServeHTTP(w, req)
 			return
 		}
 
 		tu := *tu
 		q := tu.Query()
-		q.Set("url", "http://"+req.Host+req.URL.String())
+		q.Set("url", u.String())
 
 		log.Println(req.URL.String())
 		log.Printf("%#v", req.URL)
@@ -60,7 +61,6 @@ func main() {
 		resp, err := http.Get(tu.String() + "?" + q.Encode())
 		if err != nil {
 			http.Error(w, "getting torrent failed", http.StatusInternalServerError)
-			log.Println("getting torrent failed", err)
 			return
 		}
 
@@ -69,7 +69,6 @@ func main() {
 		f, err := ioutil.TempFile(*root, "image-torrent-")
 		if err != nil {
 			http.Error(w, "torrent file creation failed", http.StatusInternalServerError)
-			log.Println("torrent file creation failed", err)
 			return
 		}
 
@@ -81,36 +80,36 @@ func main() {
 		_, err = io.Copy(f, resp.Body)
 		if err != nil {
 			http.Error(w, "reading torrent contents failed", http.StatusInternalServerError)
-			log.Println("reading torrent contents failed", err)
 			return
 		}
 
 		m, err := torrent.GetMetaInfo(nil, f.Name())
 		if err != nil {
 			http.Error(w, "reading torrent failed", http.StatusInternalServerError)
-			log.Println("reading torrent failed", err)
 			return
 		}
 
 		err = torrent.RunTorrents(&torrent.TorrentFlags{
 			FileDir:   *root,
 			SeedRatio: 0,
-			//			UseDeadlockDetector: true,
 		}, []string{f.Name()})
+
+		lf := path.Join(*root, m.Info.Name)
+
+		defer os.Remove(lf)
 
 		// TODO: start another RunTorrents for configured interval
 		// TODO: and remove data after that
+		// TODO: or to hell with it
 
 		if err != nil {
 			http.Error(w, "downloading torrent failed", http.StatusInternalServerError)
-			log.Println("downloading torrent failed", err)
 			return
 		}
 
-		l, err := os.Open(path.Join(*root, m.Info.Name))
+		l, err := os.Open(lf)
 		if err != nil {
 			http.Error(w, "layer file open failed", http.StatusInternalServerError)
-			log.Println("layer file open failed", err)
 			return
 		}
 
