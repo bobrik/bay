@@ -7,6 +7,7 @@ import "net/http"
 import "io"
 import "crypto/sha1"
 import "fmt"
+import "log"
 
 type Downloader struct {
 	root    string
@@ -33,6 +34,7 @@ func (d *Downloader) Download(url string) (file string, err error) {
 
 	// existing mutex: just wait for it to unlock
 	if e, ok := d.current[name]; ok {
+		log.Println("waiting for current download to finish")
 		d.mutex.Unlock()
 		e.Lock()
 
@@ -40,6 +42,8 @@ func (d *Downloader) Download(url string) (file string, err error) {
 		// and "e" is no longer referenced from the map
 		return d.Download(url)
 	}
+
+	log.Println("starting new download")
 
 	// new mutex: create it and put into map
 	m := &sync.Mutex{}
@@ -57,7 +61,7 @@ func (d *Downloader) Download(url string) (file string, err error) {
 
 	// delete mutex from the map
 	d.mutex.Lock()
-	delete(d.current, "name")
+	delete(d.current, name)
 	d.mutex.Unlock()
 
 	return
