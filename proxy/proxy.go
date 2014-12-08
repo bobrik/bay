@@ -33,12 +33,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		u := *req.URL
-
-		if req.Host == "localhost" {
-			u.Host = "registry-1.docker.io"
-		} else {
-			u.Host = req.Host
-		}
+		u.Host = strings.TrimPrefix(req.Host, "p2p-")
 
 		if req.TLS != nil {
 			u.Scheme = "https"
@@ -60,8 +55,6 @@ func main() {
 		q := tu.Query()
 		q.Set("url", u.String())
 
-		log.Println(req.URL.String())
-		log.Printf("%#v", req.URL)
 		log.Println(tu.String() + "?" + q.Encode())
 
 		resp, err := http.Get(tu.String() + "?" + q.Encode())

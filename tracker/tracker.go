@@ -138,6 +138,8 @@ func (t *Tracker) handle(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Println("dealing with " + u)
+
 	t.mutex.Lock()
 
 	// existing mutex: just wait for it to unlock
