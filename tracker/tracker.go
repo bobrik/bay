@@ -76,11 +76,11 @@ func NewTracker(listen, trListen, root string, port int) (*Tracker, error) {
 	return t, nil
 }
 
-func (t *Tracker) ensureTorrentExists(file string) (string, error) {
+func (t *Tracker) ensureTorrentExists(file string, trkr string) (string, error) {
 	tf := file + ".torrent"
 
 	if _, err := os.Stat(tf); os.IsNotExist(err) {
-		m, err := torrent.CreateMetaInfoFromFileSystem(nil, file, 0, true)
+		m, err := torrent.CreateMetaInfoFromFileSystem(nil, file, trkr, 0, true)
 		if err != nil {
 			return tf, err
 		}
@@ -109,7 +109,7 @@ func (t *Tracker) handleSafely(w http.ResponseWriter, u string) error {
 		return err
 	}
 
-	tf, err := t.ensureTorrentExists(f)
+	tf, err := t.ensureTorrentExists(f, t.trListen)
 	if err != nil {
 		return err
 	}

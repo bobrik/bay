@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -43,7 +44,10 @@ func main() {
 
 		log.Println("got request:", req.Method, u.String())
 
-		if req.Method == "PUT" || !strings.HasPrefix(u.Path, "/v1/images/") || !strings.HasSuffix(u.Path, "/layer") {
+		v1r, _ := regexp.Compile("/v1/images/.*/layer")
+		v2r, _ := regexp.Compile("/v2/.*/blobs/.*")
+
+		if req.Method == "PUT" || !(v2r.MatchString(u.Path) || v1r.MatchString(u.Path)) {
 			pu := u
 			pu.Path = "/"
 			proxy := httputil.NewSingleHostReverseProxy(&pu)
