@@ -1,4 +1,4 @@
-package bay
+package main
 
 import "sync"
 import "os"

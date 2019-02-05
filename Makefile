@@ -1,7 +1,7 @@
 -include .env
 .DEFAULT_GOAL := help
 PROJECTNAME := $(shell basename "$(PWD)")
-BINS := proxy tracker
+BINS := $(shell ls -1d */ | grep -vE '(bin|vendor)' | tr -d '/' | tr '\n' ' ')
 CMDSEP := ;
 
 # Go related variables.

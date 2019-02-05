@@ -6,7 +6,6 @@ import "github.com/jackpal/Taipei-Torrent/tracker"
 import "github.com/jackpal/Taipei-Torrent/torrent"
 import "os"
 import "net/http"
-import "github.com/bobrik/bay"
 import "math"
 import "sync"
 
@@ -14,7 +13,7 @@ type Tracker struct {
 	mutex    sync.Mutex
 	requests map[string]*sync.Mutex
 
-	downloader *bay.Downloader
+	downloader *Downloader
 
 	flags        *torrent.TorrentFlags
 	conns        chan *torrent.BtConn
@@ -54,7 +53,7 @@ func NewTracker(listen, trListen, root string, port int) (*Tracker, error) {
 		mutex:    sync.Mutex{},
 		requests: map[string]*sync.Mutex{},
 
-		downloader: bay.NewDownloader(root),
+		downloader: NewDownloader(root),
 
 		flags:        flags,
 		conns:        conns,
