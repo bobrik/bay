@@ -29,10 +29,18 @@ compile: install
 	$(foreach pkg,$(BINS),$(MAKE) go-build-$(pkg) 2> $(STDERR) $(CMDSEP))
 	@cat $(STDERR) | sed -e '1s/.*/\nError:\n/'  | sed 's/make\[.*/ /' | sed "/^/s/^/     /" 1>&2
 
+## docker: Build docker images
+docker:
+	$(foreach pkg,$(BINS),$(MAKE) docker-$(pkg) $(CMDSEP))
+
 ## clean: Clean build files. Runs `go clean` internally.
 clean:
 	@-rm $(GOBIN)/$(PROJECTNAME)-* 2> /dev/null
 	$(foreach pkg,$(BINS),$(MAKE) go-clean-$(pkg) $(CMDSEP))
+
+docker-%:
+	@echo "  >  Building $* docker image..."
+	@cd $* && docker build -t $(PROJECTNAME)-$* .
 
 go-compile-%:
 	@$(MAKE) go-get-$*
