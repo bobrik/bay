@@ -15,10 +15,24 @@ import (
 	"strings"
 )
 
+type DebugTransport struct{}
+
+func (DebugTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	b, err := httputil.DumpRequestOut(r, false)
+	if err != nil {
+		return nil, err
+	}
+	log.Println(string(b))
+	return http.DefaultTransport.RoundTrip(r)
+}
+
 func main() {
 	tracker := flag.String("tracker", "", "tracker url: http://host:port/")
 	listen := flag.String("listen", "0.0.0.0:8888", "bind location")
 	root := flag.String("root", "", "root dir to keep working files")
+	stripPort := flag.Bool("strip-port", false, "strip port from URL before proxying")
+	tls := flag.Bool("tls", false, "upstream uses TLS")
+	debug := flag.Bool("debug", false, "Log debug info")
 	flag.Parse()
 
 	if *tracker == "" || *root == "" {
@@ -36,7 +50,12 @@ func main() {
 		u := *req.URL
 		u.Host = strings.TrimPrefix(req.Host, "p2p-")
 
-		if req.TLS != nil {
+		if *stripPort {
+			re := regexp.MustCompile(`^(.*):([0-9]*)$`)
+			u.Host = re.ReplaceAllString(u.Host, `$1`)
+		}
+
+		if req.TLS != nil || *tls {
 			u.Scheme = "https"
 		} else {
 			u.Scheme = "http"
@@ -44,13 +63,23 @@ func main() {
 
 		log.Println("got request:", req.Method, u.String())
 
-		v1r, _ := regexp.Compile("/v1/images/.*/layer")
-		v2r, _ := regexp.Compile("/v2/.*/blobs/.*")
+		v1r := regexp.MustCompile("/v1/images/.*/layer")
+		v2r := regexp.MustCompile("/v2/.*/blobs/.*")
 
 		if req.Method == "PUT" || !(v2r.MatchString(u.Path) || v1r.MatchString(u.Path)) {
 			pu := u
 			pu.Path = "/"
 			proxy := httputil.NewSingleHostReverseProxy(&pu)
+
+			if *debug {
+				proxy.Transport = DebugTransport{}
+			}
+
+			// Update the headers to allow for SSL redirection
+			req.Header.Set("X-Forwarded-Host", pu.Host)
+			req.Header.Set("Host", pu.Host)
+			req.Host = pu.Host
+
 			proxy.ServeHTTP(w, req)
 			return
 		}
@@ -58,10 +87,11 @@ func main() {
 		tu := *tu
 		q := tu.Query()
 		q.Set("url", u.String())
+		torrentURL := tu.String() + "?" + q.Encode()
 
-		log.Println(tu.String() + "?" + q.Encode())
+		log.Println(torrentURL)
 
-		resp, err := http.Get(tu.String() + "?" + q.Encode())
+		resp, err := http.Get(torrentURL)
 		if err != nil {
 			http.Error(w, "getting torrent failed", http.StatusInternalServerError)
 			return
@@ -72,6 +102,7 @@ func main() {
 		f, err := ioutil.TempFile(*root, "image-torrent-")
 		if err != nil {
 			http.Error(w, "torrent file creation failed", http.StatusInternalServerError)
+			log.Println("torrent file creation failed")
 			return
 		}
 
@@ -83,12 +114,14 @@ func main() {
 		_, err = io.Copy(f, resp.Body)
 		if err != nil {
 			http.Error(w, "reading torrent contents failed", http.StatusInternalServerError)
+			log.Println("reading torrent contents failed")
 			return
 		}
 
 		m, err := torrent.GetMetaInfo(nil, f.Name())
 		if err != nil {
 			http.Error(w, "reading torrent failed", http.StatusInternalServerError)
+			log.Println("reading torrent failed")
 			return
 		}
 
@@ -107,12 +140,14 @@ func main() {
 
 		if err != nil {
 			http.Error(w, "downloading torrent failed", http.StatusInternalServerError)
+			log.Println("downloading torrent failed")
 			return
 		}
 
 		l, err := os.Open(lf)
 		if err != nil {
 			http.Error(w, "layer file open failed", http.StatusInternalServerError)
+			log.Println("layer file open failed")
 			return
 		}
 

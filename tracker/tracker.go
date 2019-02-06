@@ -81,6 +81,7 @@ func (t *Tracker) ensureTorrentExists(file string, trkr string) (string, error) 
 	if _, err := os.Stat(tf); os.IsNotExist(err) {
 		m, err := torrent.CreateMetaInfoFromFileSystem(nil, file, trkr, 0, true)
 		if err != nil {
+			log.Println(tf + ": File not found")
 			return tf, err
 		}
 
@@ -105,6 +106,7 @@ func (t *Tracker) ensureTorrentExists(file string, trkr string) (string, error) 
 func (t *Tracker) handleSafely(w http.ResponseWriter, u string) error {
 	f, err := t.downloader.Download(u)
 	if err != nil {
+		log.Println("Error Downloading file")
 		return err
 	}
 
