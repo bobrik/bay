@@ -1,13 +1,15 @@
 package main
 
-import "log"
-import "flag"
-import "github.com/jackpal/Taipei-Torrent/tracker"
-import "github.com/jackpal/Taipei-Torrent/torrent"
-import "os"
-import "net/http"
-import "math"
-import "sync"
+import (
+	"flag"
+	"github.com/jackpal/Taipei-Torrent/torrent"
+	"github.com/jackpal/Taipei-Torrent/tracker"
+	"log"
+	"math"
+	"net/http"
+	"os"
+	"sync"
+)
 
 type Tracker struct {
 	mutex    sync.Mutex
@@ -103,8 +105,8 @@ func (t *Tracker) ensureTorrentExists(file string, trkr string) (string, error) 
 	return tf, nil
 }
 
-func (t *Tracker) handleSafely(w http.ResponseWriter, u string) error {
-	f, err := t.downloader.Download(u)
+func (t *Tracker) handleSafely(w http.ResponseWriter, req *http.Request) error {
+	f, err := t.downloader.Download(req)
 	if err != nil {
 		log.Println("Error Downloading file")
 		return err
@@ -139,6 +141,17 @@ func (t *Tracker) handle(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	downloadReq, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		log.Fatalln(err)
+		return
+	}
+
+	authToken := req.Header.Get("Authorization")
+	if authToken != "" {
+		downloadReq.Header.Set("Authorization", authToken)
+	}
+
 	log.Println("dealing with " + u)
 
 	t.mutex.Lock()
@@ -165,7 +178,7 @@ func (t *Tracker) handle(w http.ResponseWriter, req *http.Request) {
 	t.mutex.Unlock()
 
 	// actually do some job
-	err := t.handleSafely(w, u)
+	err = t.handleSafely(w, downloadReq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

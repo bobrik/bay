@@ -88,11 +88,30 @@ func main() {
 		q := tu.Query()
 		q.Set("url", u.String())
 		torrentURL := tu.String() + "?" + q.Encode()
+		torrentClient := http.DefaultClient
+		torrentReq, err := http.NewRequest("GET", torrentURL, nil)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		authToken := req.Header.Get("Authorization")
+		if authToken != "" {
+			if *debug {
+				log.Println("Found an authorization token: " + authToken)
+			}
+			torrentReq.Header.Set("Authorization", authToken)
+		}
 
 		log.Println(torrentURL)
 
-		resp, err := http.Get(torrentURL)
+		resp, err := torrentClient.Do(torrentReq)
 		if err != nil {
+			http.Error(w, "getting torrent failed", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Status: %s\n", resp.Status)
+		if resp.StatusCode != 200 {
 			http.Error(w, "getting torrent failed", http.StatusInternalServerError)
 			return
 		}

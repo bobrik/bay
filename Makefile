@@ -25,8 +25,8 @@ install:
 ## compile: Compile the binary.
 compile: install
 	@-touch $(STDERR)
-	@-rm $(STDERR)
-	$(foreach pkg,$(PKGS),$(MAKE) go-build-$(pkg) 2> $(STDERR)-$(pkg) $(CMDSEP))
+	@-rm $(STDERR)-*
+	-$(foreach pkg,$(PKGS),$(MAKE) go-build-$(pkg) 2> $(STDERR)-$(pkg) $(CMDSEP))
 	@cat $(STDERR)-* | sed -e '1s/.*/\nError:\n/'  | sed 's/make\[.*/ /' | sed "/^/s/^/     /" 1>&2
 
 ## docker: Build docker images.
@@ -35,6 +35,7 @@ docker:
 
 ## clean: Clean build files. Runs `go clean` internally.
 clean:
+	@-rm $(STDERR)-*
 	@-rm $(GOBIN)/$(PROJECTNAME)-* 2> /dev/null
 	$(foreach pkg,$(PKGS),$(MAKE) go-clean-$(pkg) $(CMDSEP))
 

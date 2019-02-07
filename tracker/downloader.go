@@ -1,13 +1,16 @@
 package main
 
-import "sync"
-import "os"
-import "path"
-import "net/http"
-import "io"
-import "crypto/sha1"
-import "fmt"
-import "log"
+import (
+	"crypto/sha1"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path"
+	"sync"
+)
 
 type Downloader struct {
 	root    string
@@ -23,8 +26,8 @@ func NewDownloader(root string) *Downloader {
 	}
 }
 
-func (d *Downloader) Download(url string) (file string, err error) {
-	name := fmt.Sprintf("%x", sha1.Sum([]byte(url)))
+func (d *Downloader) Download(req *http.Request) (file string, err error) {
+	name := fmt.Sprintf("%x", sha1.Sum([]byte(req.URL.String())))
 	file = path.Join(d.root, name)
 	if _, err = os.Stat(file); err == nil {
 		return
@@ -40,7 +43,7 @@ func (d *Downloader) Download(url string) (file string, err error) {
 
 		// here file is downloaded already or failed
 		// and "e" is no longer referenced from the map
-		return d.Download(url)
+		return d.Download(req)
 	}
 
 	log.Println("starting new download")
@@ -54,7 +57,7 @@ func (d *Downloader) Download(url string) (file string, err error) {
 
 	d.mutex.Unlock()
 
-	err = d.save(url, file)
+	err = d.save(req, file)
 	if err != nil {
 		return
 	}
@@ -67,7 +70,7 @@ func (d *Downloader) Download(url string) (file string, err error) {
 	return
 }
 
-func (d *Downloader) save(url, file string) error {
+func (d *Downloader) save(req *http.Request, file string) error {
 	out, err := os.Create(file + ".downloading")
 	if err != nil {
 		return err
@@ -75,9 +78,14 @@ func (d *Downloader) save(url, file string) error {
 
 	defer out.Close()
 
-	resp, err := http.Get(url)
+	downloadClient := http.DefaultClient
+	resp, err := downloadClient.Do(req)
 	if err != nil {
 		return err
+	}
+	log.Printf("Status: %s\n", resp.Status)
+	if resp.StatusCode != 200 {
+		return errors.New("Failed to download: " + resp.Status)
 	}
 
 	defer resp.Body.Close()
