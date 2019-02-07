@@ -146,8 +146,12 @@ func main() {
 		}
 
 		err = torrent.RunTorrents(&torrent.TorrentFlags{
-			FileDir:   *root,
-			SeedRatio: 0,
+			FileDir:            *root,
+			SeedRatio:          0,
+			FileSystemProvider: torrent.OsFsProvider{},
+			InitialCheck:       true,
+			MaxActive:          6,
+			MemoryPerTorrent:   -1,
 		}, []string{f.Name()})
 
 		lf := path.Join(*root, m.Info.Name)

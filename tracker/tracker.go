@@ -55,6 +55,8 @@ func NewTracker(listen, trListen, root string, port int) (*Tracker, error) {
 		FileDir:             root,
 		SeedRatio:           math.Inf(0),
 		UseDeadlockDetector: true,
+		MaxActive:           16,
+		MemoryPerTorrent:    -1,
 		FileSystemProvider:  torrent.OsFsProvider{},
 	}
 
