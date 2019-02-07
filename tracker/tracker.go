@@ -2,14 +2,31 @@ package main
 
 import (
 	"flag"
-	"github.com/jackpal/Taipei-Torrent/torrent"
-	"github.com/jackpal/Taipei-Torrent/tracker"
+	"fmt"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
+
+	"github.com/jackpal/Taipei-Torrent/torrent"
+	"github.com/jackpal/Taipei-Torrent/tracker"
 )
+
+// GetOutboundIP Get preferred outbound ip of this machine
+func GetOutboundIP() net.IP {
+	conn, err := net.Dial("udp", "somefakedomain.com:80")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP
+}
 
 type Tracker struct {
 	mutex    sync.Mutex
@@ -38,6 +55,7 @@ func NewTracker(listen, trListen, root string, port int) (*Tracker, error) {
 		FileDir:             root,
 		SeedRatio:           math.Inf(0),
 		UseDeadlockDetector: true,
+		FileSystemProvider:  torrent.OsFsProvider{},
 	}
 
 	conns, listenPort, err := torrent.ListenForPeerConnections(flags)
@@ -77,17 +95,18 @@ func NewTracker(listen, trListen, root string, port int) (*Tracker, error) {
 	return t, nil
 }
 
-func (t *Tracker) ensureTorrentExists(file string, trkr string) (string, error) {
+func (t *Tracker) ensureTorrentExists(file string) (string, error) {
 	tf := file + ".torrent"
 
 	if _, err := os.Stat(tf); os.IsNotExist(err) {
+		trkr := strings.Replace(t.trListen, "0.0.0.0", GetOutboundIP().String(), 1)
 		m, err := torrent.CreateMetaInfoFromFileSystem(nil, file, trkr, 0, true)
 		if err != nil {
 			log.Println(tf + ": File not found")
 			return tf, err
 		}
 
-		m.Announce = "http://" + t.trListen + "/announce"
+		// m.Announce = "http://" + t.trListen + "/announce"
 
 		meta, err := os.Create(tf)
 		if err != nil {
@@ -112,7 +131,7 @@ func (t *Tracker) handleSafely(w http.ResponseWriter, req *http.Request) error {
 		return err
 	}
 
-	tf, err := t.ensureTorrentExists(f, t.trListen)
+	tf, err := t.ensureTorrentExists(f)
 	if err != nil {
 		return err
 	}

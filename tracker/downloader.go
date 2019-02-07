@@ -85,6 +85,7 @@ func (d *Downloader) save(req *http.Request, file string) error {
 	}
 	log.Printf("Status: %s\n", resp.Status)
 	if resp.StatusCode != 200 {
+		os.Remove(file + ".downloading")
 		return errors.New("Failed to download: " + resp.Status)
 	}
 

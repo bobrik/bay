@@ -54,6 +54,7 @@ docker-clean-%:
 	@cd $* && docker rmi $(PROJECTNAME)-$*
 
 go-compile-%:
+	@go fmt ./...
 	@$(MAKE) go-get-$*
 	@$(MAKE) go-build-$*
 

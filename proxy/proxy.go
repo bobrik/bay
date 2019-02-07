@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/jackpal/Taipei-Torrent/torrent"
 	"io"
 	"io/ioutil"
 	"log"
@@ -13,6 +12,8 @@ import (
 	"path"
 	"regexp"
 	"strings"
+
+	"github.com/jackpal/Taipei-Torrent/torrent"
 )
 
 type DebugTransport struct{}
