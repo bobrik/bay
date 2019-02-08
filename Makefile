@@ -1,6 +1,12 @@
 -include .env
+
 .DEFAULT_GOAL := help
+SHELL := /usr/bin/env bash
+
+VERSION := 0.1.0
+BUILD := $(shell git rev-parse HEAD)
 PROJECTNAME := $(shell basename "$(PWD)")
+
 PKGS := $(shell ls -1d */ | grep -vE '(bin|vendor)' | tr -d '/' | tr '\n' ' ')
 CMDSEP := ;
 
@@ -8,6 +14,9 @@ CMDSEP := ;
 GOBASE := $(shell pwd)
 GOPATH := $(GOBASE)/vendor:$(GOBASE)
 GOBIN := $(GOBASE)/bin
+
+# Use linker flags to provide version/build settings to the target
+LDFLAGS=-ldflags "-X=main.Version=$(VERSION) -X=main.Build=$(BUILD)"
 
 # Redirect error output to a file, so we can show it in development mode.
 STDERR := /tmp/.$(PROJECTNAME)-stderr
@@ -21,6 +30,8 @@ MAKEFLAGS += --silent
 ## install: Install missing dependencies. Runs `go get` internally. e.g; make install get=github.com/foo/bar
 install:
 	$(foreach pkg,$(PKGS),$(MAKE) go-get-$(pkg) $(CMDSEP))
+
+build: clean compile
 
 ## compile: Compile the binary.
 compile: install
@@ -60,7 +71,7 @@ go-compile-%:
 
 go-build-%:
 	@echo " --->  Building $* binary..."
-	@cd $* && GOPATH=$(GOPATH) GOBIN=$(GOBIN) go build -o $(GOBIN)/$(PROJECTNAME)-$*
+	@cd $* && GOPATH=$(GOPATH) GOBIN=$(GOBIN) go build $(LDFLAGS) -o $(GOBIN)/$(PROJECTNAME)-$*
 
 go-generate-%:
 	@echo " --->  Generating $* dependency files..."
