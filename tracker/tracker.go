@@ -1,20 +1,38 @@
 package main
 
-import "log"
-import "flag"
-import "github.com/jackpal/Taipei-Torrent/tracker"
-import "github.com/jackpal/Taipei-Torrent/torrent"
-import "os"
-import "net/http"
-import "github.com/bobrik/bay"
-import "math"
-import "sync"
+import (
+	"flag"
+	"fmt"
+	"log"
+	"math"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+
+	"github.com/jackpal/Taipei-Torrent/torrent"
+	"github.com/jackpal/Taipei-Torrent/tracker"
+)
+
+// GetOutboundIP Get preferred outbound ip of this machine
+func GetOutboundIP() net.IP {
+	conn, err := net.Dial("udp", "somefakedomain.com:80")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP
+}
 
 type Tracker struct {
 	mutex    sync.Mutex
 	requests map[string]*sync.Mutex
 
-	downloader *bay.Downloader
+	downloader *Downloader
 
 	flags        *torrent.TorrentFlags
 	conns        chan *torrent.BtConn
@@ -37,6 +55,9 @@ func NewTracker(listen, trListen, root string, port int) (*Tracker, error) {
 		FileDir:             root,
 		SeedRatio:           math.Inf(0),
 		UseDeadlockDetector: true,
+		MaxActive:           16,
+		MemoryPerTorrent:    -1,
+		FileSystemProvider:  torrent.OsFsProvider{},
 	}
 
 	conns, listenPort, err := torrent.ListenForPeerConnections(flags)
@@ -54,7 +75,7 @@ func NewTracker(listen, trListen, root string, port int) (*Tracker, error) {
 		mutex:    sync.Mutex{},
 		requests: map[string]*sync.Mutex{},
 
-		downloader: bay.NewDownloader(root),
+		downloader: NewDownloader(root),
 
 		flags:        flags,
 		conns:        conns,
@@ -80,12 +101,14 @@ func (t *Tracker) ensureTorrentExists(file string) (string, error) {
 	tf := file + ".torrent"
 
 	if _, err := os.Stat(tf); os.IsNotExist(err) {
-		m, err := torrent.CreateMetaInfoFromFileSystem(nil, file, 0, true)
+		trkr := strings.Replace(t.trListen, "0.0.0.0", GetOutboundIP().String(), 1)
+		m, err := torrent.CreateMetaInfoFromFileSystem(nil, file, trkr, 0, true)
 		if err != nil {
+			log.Println(tf + ": File not found")
 			return tf, err
 		}
 
-		m.Announce = "http://" + t.trListen + "/announce"
+		// m.Announce = "http://" + t.trListen + "/announce"
 
 		meta, err := os.Create(tf)
 		if err != nil {
@@ -103,9 +126,10 @@ func (t *Tracker) ensureTorrentExists(file string) (string, error) {
 	return tf, nil
 }
 
-func (t *Tracker) handleSafely(w http.ResponseWriter, u string) error {
-	f, err := t.downloader.Download(u)
+func (t *Tracker) handleSafely(w http.ResponseWriter, req *http.Request) error {
+	f, err := t.downloader.Download(req)
 	if err != nil {
+		log.Println("Error Downloading file")
 		return err
 	}
 
@@ -138,6 +162,17 @@ func (t *Tracker) handle(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	downloadReq, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		log.Fatalln(err)
+		return
+	}
+
+	authToken := req.Header.Get("Authorization")
+	if authToken != "" {
+		downloadReq.Header.Set("Authorization", authToken)
+	}
+
 	log.Println("dealing with " + u)
 
 	t.mutex.Lock()
@@ -164,7 +199,7 @@ func (t *Tracker) handle(w http.ResponseWriter, req *http.Request) {
 	t.mutex.Unlock()
 
 	// actually do some job
-	err := t.handleSafely(w, u)
+	err = t.handleSafely(w, downloadReq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
